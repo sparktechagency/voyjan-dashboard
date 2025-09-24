@@ -8,7 +8,6 @@ import {
   FaFileAlt,
   FaSignOutAlt,
 
-  FaTachometerAlt,
   FaEdit,
   FaTrash,
   FaDownload,
@@ -23,8 +22,6 @@ import {
   FaBell,
   FaSearch,
   FaFilter,
-  FaStar,
-  FaHeart,
   FaRocket
 } from 'react-icons/fa';
 import { axiosInstance } from './helpers/axiosInstence';
@@ -60,11 +57,12 @@ const AdminDashboard: React.FC = () => {
   const [csvUploadLoading, setCsvUploadLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(20);
+  const [pageSize] = useState(21);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('');
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
   const [update, setUpdate] = useState(true);
+  const [addressLoading, setAddressLoading] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -265,15 +263,17 @@ useEffect(() => {
     const formdata = new FormData(e.currentTarget);
 
     const address = formdata.get('address') as string;
-
+    setAddressLoading(true);
     const res = await axiosInstance.post(`/address`, {
       address
     });
     if(res.data.success){
+      setAddressLoading(false);
       setUpdate(!update);
       showNotification('Addresses added successfully', 'success');
     }
     else{
+      setAddressLoading(false);
       showNotification(res.data.message, 'error');
     }
     
@@ -626,18 +626,6 @@ useEffect(() => {
           
           <nav className="flex-1 p-4 space-y-2">
             <button
-              onClick={() => setCurrentSection('dashboard')}
-              className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl text-left font-medium transition-all duration-300 ${
-                currentSection === 'dashboard' 
-                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-[1.02]' 
-                  : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
-              }`}
-            >
-              <FaTachometerAlt className="text-lg flex-shrink-0" />
-              {sidebarOpen && <span>Dashboard</span>}
-            </button>
-            
-            <button
               onClick={() => setCurrentSection('addresses')}
               className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl text-left font-medium transition-all duration-300 ${
                 currentSection === 'addresses' 
@@ -705,57 +693,7 @@ useEffect(() => {
           <main className="flex-1 overflow-auto p-8">
             {currentSection === 'dashboard' ? (
               <div className="space-y-8">
-                {/* Stats Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-gradient-to-br from-blue-500 via-blue-600 to-purple-700 text-white p-8 rounded-3xl shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-[1.02] relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
-                    <div className="relative z-10">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
-                          <FaMapMarkerAlt className="text-xl" />
-                        </div>
-                        <FaHeart className="text-white/50 text-2xl" />
-                      </div>
-                      <p className="text-blue-100 mb-2 font-medium">Total Addresses</p>
-                      <p className="text-4xl font-bold mb-2">{addresses.length}</p>
-                      <p className="text-blue-200 text-sm">↗️ +12% from last month</p>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-gradient-to-br from-emerald-500 via-green-600 to-teal-700 text-white p-8 rounded-3xl shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-[1.02] relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
-                    <div className="relative z-10">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
-                          <FaImage className="text-xl" />
-                        </div>
-                        <FaStar className="text-white/50 text-2xl" />
-                      </div>
-                      <p className="text-green-100 mb-2 font-medium">With Images</p>
-                      <p className="text-4xl font-bold mb-2">
-                        {addresses.filter(addr => addr.imageUrl && addr.imageUrl.length > 0).length}
-                      </p>
-                      <p className="text-green-200 text-sm">📸 Visual content available</p>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-gradient-to-br from-purple-500 via-pink-600 to-rose-700 text-white p-8 rounded-3xl shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-[1.02] relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
-                    <div className="relative z-10">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
-                          <FaFileAlt className="text-xl" />
-                        </div>
-                        <FaRocket className="text-white/50 text-2xl" />
-                      </div>
-                      <p className="text-purple-100 mb-2 font-medium">Address Types</p>
-                      <p className="text-4xl font-bold mb-2">
-                        {new Set(addresses.filter(addr => addr.type).map(addr => addr.type)).size}
-                      </p>
-                      <p className="text-purple-200 text-sm">🏷️ Different categories</p>
-                    </div>
-                  </div>
-                </div>
+                {/*
 
                 {/* Recent Addresses */}
                 <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-200/50">
@@ -870,6 +808,9 @@ useEffect(() => {
                             />
 
                             <button className='flex cursor-pointer items-center gap-3 px-3 py-3 border-2 border-green-500 text-green-600 rounded-2xl font-semibold hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300'>
+                            {
+                              addressLoading ? <FaSpinner className="animate-spin" /> : <FaUpload />
+                            }
                               Add by address
                             </button>
                   
