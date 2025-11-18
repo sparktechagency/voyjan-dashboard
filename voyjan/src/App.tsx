@@ -90,7 +90,7 @@ const AdminDashboard: React.FC = () => {
     "Shopping Mall",
     "Hospital",
     "School",
-    "Office",
+    "Office", 
     "Residential",
     "Tourist Attraction",
     "Other",
@@ -163,7 +163,8 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleAddAddress = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+    try {
+          e.preventDefault();
     const formData = new FormData(e.currentTarget);
 
     const newAddress = {
@@ -177,6 +178,9 @@ const AdminDashboard: React.FC = () => {
       setUpdate(!update);
       showNotification("Address added successfully", "success");
       setIsAddModalVisible(false);
+    }
+    } catch (error) {
+      showNotification("Address is already added", "error");
     }
   };
 
