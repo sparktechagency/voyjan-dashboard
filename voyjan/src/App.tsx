@@ -49,6 +49,7 @@ export type ICategory = {
 const AdminDashboard: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem("token") !== null);
   const [currentUser, setCurrentUser] = useState<string>("");
+  const [currentEmail, setCurrentEmail] = useState<string>("");
   const [addresses, setAddresses] = useState<IAddress[]>([]);
   const [categories, setCategories] = useState<ICategory[]>([]);
   const [pagination, setPagination] = useState<any>(null);
@@ -77,11 +78,16 @@ const AdminDashboard: React.FC = () => {
   // BULK DELETE STATE
   const [selectedAddresses, setSelectedAddresses] = useState<string[]>([]);
 
+  // PROFILE PASSWORD CHANGE STATE
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordChangeLoading, setPasswordChangeLoading] = useState(false);
+  const [changeUserLoading, setChangeUserLoading] = useState(false);
   const socket = useMemo(() => io("https://api.voyagen.co.uk"), []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addressTypes = categories.map((category) => category.name);
-
   const filteredAddresses = addresses;
   const currentAddresses = filteredAddresses;
 
@@ -114,14 +120,11 @@ const AdminDashboard: React.FC = () => {
 
   const handleBulkDelete = async () => {
     if (selectedAddresses.length === 0) return;
-
     if (!window.confirm(`Delete ${selectedAddresses.length} address(es) permanently?`)) return;
-
     try {
       const res = await axiosInstance.post("/address/bulk-delete", {
         ids: selectedAddresses,
       });
-
       if (res.data.success) {
         setUpdate(!update);
         clearSelection();
@@ -137,12 +140,10 @@ const AdminDashboard: React.FC = () => {
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoginLoading(true);
-
     const formData = new FormData(e.currentTarget);
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
     const res = await axiosInstance.post("/auth/login", { email, password });
-
     if (res.data.success) {
       setIsLoggedIn(true);
       setCurrentUser(email);
@@ -168,11 +169,23 @@ const AdminDashboard: React.FC = () => {
         );
         setPagination(res.data.pagination);
       });
-
     axiosInstance.get("/category").then((res) => {
       setCategories(res.data?.data || []);
     });
   }, [currentPage, searchQuery, update]);
+
+  useEffect(() => {
+   
+      axiosInstance.get("/user/profile").then((res) => {
+        console.log(res);
+        
+        if (res.data.success) {
+          setCurrentUser(res.data.data.name);
+          setCurrentEmail(res.data.data.email);
+        }
+      })
+    
+  }, [currentSection]);
 
   const handleLogout = () => {
     setIsLoggedIn(false);
@@ -207,13 +220,11 @@ const AdminDashboard: React.FC = () => {
   const handleUpdateAddress = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editingAddress) return;
-
     const formData = new FormData(e.currentTarget);
     const imageUrls = (formData.get("imageUrl") as string)
       ?.split(",")
       .map((url) => url.trim())
       .filter((url) => url);
-
     const updatedAddress: IAddress = {
       ...editingAddress,
       name: formData.get("name") as string,
@@ -229,7 +240,6 @@ const AdminDashboard: React.FC = () => {
       country: formData.get("country") as string,
       postalCode: formData.get("postalCode") as string,
     };
-
     const res = await axiosInstance.patch(`/address/${editingAddress.id}`, updatedAddress);
     if (!res.data.success) {
       showNotification(res.data.message, "error");
@@ -341,6 +351,61 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  // PASSWORD CHANGE HANDLER
+  const handlePasswordChange = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    if (newPassword !== confirmPassword) {
+      showNotification("New password and confirmation do not match", "error");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      showNotification("New password must be at least 6 characters long", "error");
+      return;
+    }
+
+    setPasswordChangeLoading(true);
+    try {
+      const res = await axiosInstance.post("/auth/change-password", {
+        currentPassword,
+        newPassword,
+        confirmPassword,
+      });
+
+      if (res.data.success) {
+        showNotification("Password changed successfully!", "success");
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      } else {
+        showNotification(res.data.message || "Failed to change password", "error");
+      }
+    } catch (err: any) {
+      showNotification(
+        err.response?.data?.message || "An error occurred while changing password",
+        "error"
+      );
+    } finally {
+      setPasswordChangeLoading(false);
+    }
+  };
+
+
+  const handleUserInfoChange =async ()=>{
+    setChangeUserLoading(true);
+    const res = await axiosInstance.patch("/user/profile",{
+      name:currentUser,
+      email:currentEmail
+    })
+    if(res.data.success){
+      showNotification("User info updated successfully", "success");
+    }else{
+      showNotification(res.data.message, "error");
+    }
+    setChangeUserLoading(false);
+  }
+
   const totalPages = (pagination as any)?.total;
 
   const NotificationComponent = () => {
@@ -351,7 +416,6 @@ const AdminDashboard: React.FC = () => {
         : notification.type === "error"
         ? "bg-gradient-to-r from-red-500 to-pink-500"
         : "bg-gradient-to-r from-blue-500 to-indigo-500";
-
     return (
       <div className={`fixed top-6 right-6 ${bgColor} text-white px-6 py-4 rounded-2xl shadow-2xl z-50 flex items-center gap-3 animate-slide-in-right max-w-sm`}>
         <div className="flex-shrink-0">
@@ -374,7 +438,6 @@ const AdminDashboard: React.FC = () => {
         <div className="absolute top-40 -right-40 w-80 h-80 bg-blue-400/10 rounded-full blur-3xl animate-pulse animation-delay-1000"></div>
         <div className="absolute -bottom-40 left-1/2 w-80 h-80 bg-purple-400/10 rounded-full blur-3xl animate-pulse animation-delay-2000"></div>
       </div>
-
       <div className="relative w-full max-w-md">
         <div className="bg-white/10 backdrop-blur-2xl rounded-3xl shadow-2xl p-8 border border-white/20">
           <div className="text-center mb-8">
@@ -384,7 +447,6 @@ const AdminDashboard: React.FC = () => {
             <h2 className="text-3xl font-bold text-white mb-2">Welcome Back</h2>
             <p className="text-white/70">Sign in to your admin dashboard</p>
           </div>
-
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="relative group">
               <FaUser className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white/50 group-focus-within:text-blue-400 transition-colors" />
@@ -408,7 +470,6 @@ const AdminDashboard: React.FC = () => {
               )}
             </button>
           </form>
-
           <div className="mt-8 text-center">
             <div className="bg-white/5 rounded-xl p-4 border border-white/10">
               <p className="text-white/70 text-sm mb-2">Demo Credentials</p>
@@ -424,7 +485,6 @@ const AdminDashboard: React.FC = () => {
     visible: boolean; onClose: () => void; onSubmit: (e: React.FormEvent<HTMLFormElement>) => void; title: string; address?: IAddress | null;
   }) => {
     if (!visible) return null;
-
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-40 animate-fade-in">
         <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden transform animate-scale-in">
@@ -434,7 +494,6 @@ const AdminDashboard: React.FC = () => {
               <FaTimes className="text-xl" />
             </button>
           </div>
-
           <form onSubmit={onSubmit} className="p-8 overflow-y-auto max-h-[70vh]">
             {!title.includes("Edit") && (
               <div className="space-y-2">
@@ -443,7 +502,6 @@ const AdminDashboard: React.FC = () => {
                 <input type="text" name="name" required placeholder="e.g., Central Park, Office Building" className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300" />
               </div>
             )}
-
             {title.includes("Edit") && (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -489,7 +547,6 @@ const AdminDashboard: React.FC = () => {
                     <input type="text" name="postalCode" defaultValue={address?.postalCode || ""} placeholder="e.g., 10024" className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300" />
                   </div>
                 </div>
-
                 <div className="space-y-6">
                   <div className="space-y-2">
                     <label className="block text-sm font-semibold text-gray-700">Formatted Address *</label>
@@ -506,7 +563,6 @@ const AdminDashboard: React.FC = () => {
                 </div>
               </>
             )}
-
             <div className="flex justify-end gap-4 mt-8">
               <button type="button" onClick={onClose} className="px-8 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-semibold transition-all duration-300">
                 Cancel
@@ -607,7 +663,6 @@ const AdminDashboard: React.FC = () => {
               )}
             </div>
           </div>
-
           <nav className="flex-1 p-4 space-y-2">
             <button onClick={() => setCurrentSection("addresses")} className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl text-left font-medium transition-all duration-300 ${currentSection === "addresses" ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-[1.02]" : "text-gray-700 hover:bg-blue-50 hover:text-blue-600"}`}>
               <FaMapMarkerAlt className="text-lg flex-shrink-0" />
@@ -617,8 +672,12 @@ const AdminDashboard: React.FC = () => {
               <FaList className="text-lg flex-shrink-0" />
               {sidebarOpen && <span>Category Management</span>}
             </button>
+            {/* NEW PROFILE SECTION IN SIDEBAR */}
+            <button onClick={() => setCurrentSection("profile")} className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl text-left font-medium transition-all duration-300 ${currentSection === "profile" ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-[1.02]" : "text-gray-700 hover:bg-blue-50 hover:text-blue-600"}`}>
+              <FaUser className="text-lg flex-shrink-0" />
+              {sidebarOpen && <span>Profile</span>}
+            </button>
           </nav>
-
           <div className="p-4 border-t border-gray-200/50">
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="w-full flex items-center justify-center p-3 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-300">
               {sidebarOpen ? <FaChevronLeft className="text-lg" /> : <FaChevronRight className="text-lg" />}
@@ -630,19 +689,23 @@ const AdminDashboard: React.FC = () => {
           <header className="bg-white/80 backdrop-blur-xl shadow-sm px-8 py-6 flex justify-between items-center border-b border-gray-200/50">
             <div>
               <h1 className="text-2xl font-bold text-gray-800 mb-1">
-                {currentSection === "dashboard" ? "Dashboard Overview" : currentSection === "categories" ? "Category Management" : "Address Management"}
+                {currentSection === "dashboard" ? "Dashboard Overview" : 
+                 currentSection === "categories" ? "Category Management" : 
+                 currentSection === "profile" ? "My Profile" : 
+                 "Address Management"}
               </h1>
               <p className="text-gray-600">
-                {currentSection === "dashboard" ? "Welcome back! Here's what's happening today." : currentSection === "categories" ? "Manage and organize your categories." : "Manage and organize your address database."}
+                {currentSection === "dashboard" ? "Welcome back! Here's what's happening today." : 
+                 currentSection === "categories" ? "Manage and organize your categories." : 
+                 currentSection === "profile" ? "View and update your account information." : 
+                 "Manage and organize your address database."}
               </p>
             </div>
-
             <div className="flex items-center gap-4">
               <div className="relative">
                 <FaBell className="text-gray-400 text-xl cursor-pointer hover:text-blue-600 transition-colors" />
                 <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
               </div>
-
               <div className="flex items-center gap-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl px-4 py-2 text-white">
                 <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center text-sm font-bold">
                   {currentUser[0]?.toUpperCase()}
@@ -652,7 +715,6 @@ const AdminDashboard: React.FC = () => {
                   <span className="text-xs text-white/70">Administrator</span>
                 </div>
               </div>
-
               <button onClick={handleLogout} className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all duration-300 font-medium">
                 <FaSignOutAlt />
                 <span>Logout</span>
@@ -677,7 +739,6 @@ const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
                 )}
-
                 <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-200/50">
                   <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between mb-8">
                     <div className="flex items-center gap-4">
@@ -691,7 +752,6 @@ const AdminDashboard: React.FC = () => {
                         Select All ({selectedAddresses.length} selected)
                       </span>
                     </div>
-
                     <div className="flex-1 flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-end">
                       <button onClick={() => setIsAddModalVisible(true)} className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-semibold hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300">
                         <FaPlus /> Add New Address
@@ -707,7 +767,6 @@ const AdminDashboard: React.FC = () => {
                       </button>
                     </div>
                   </div>
-
                   <div className="relative flex-1 mb-6">
                     <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
                     <input
@@ -718,7 +777,6 @@ const AdminDashboard: React.FC = () => {
                       className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-2xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300"
                     />
                   </div>
-
                   <div className="mt-6 bg-gradient-to-r from-blue-50 to-purple-50 p-6 rounded-2xl border border-blue-200">
                     <h4 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
                       <FaFileAlt /> CSV Upload Instructions
@@ -728,7 +786,6 @@ const AdminDashboard: React.FC = () => {
                     </p>
                   </div>
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-8">
                   {currentAddresses?.map((address) => (
                     <div
@@ -745,7 +802,6 @@ const AdminDashboard: React.FC = () => {
                           className="w-6 h-6 text-red-600 rounded focus:ring-red-500 cursor-pointer shadow-lg"
                         />
                       </div>
-
                       <div className="relative h-48 bg-gradient-to-br from-blue-500 to-purple-600">
                         {address.imageUrl && address.imageUrl[0] ? (
                           <img src={address.imageUrl[0]} alt={address.name} className="w-full h-full object-cover" />
@@ -760,7 +816,6 @@ const AdminDashboard: React.FC = () => {
                           </div>
                         )}
                       </div>
-
                       <div className="p-6">
                         <h3 className="text-xl font-bold text-gray-800 mb-2">{address.name}</h3>
                         <p className="text-gray-600 mb-2">{address.place}</p>
@@ -781,14 +836,13 @@ const AdminDashboard: React.FC = () => {
                     </div>
                   ))}
                 </div>
-
                 <div className="mt-8 flex justify-center">
                   <Pagination current={currentPage} pageSize={pageSize} total={totalPages} onChange={(page) => { setCurrentPage(page); setUpdate(!update); }} />
                 </div>
               </>
             )}
 
-            {/* ========== CATEGORIES SECTION (FULLY RESTORED) ========== */}
+            {/* ========== CATEGORIES SECTION ========== */}
             {currentSection === "categories" && (
               <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-200/50">
                 <div className="flex justify-between items-center mb-8">
@@ -800,7 +854,6 @@ const AdminDashboard: React.FC = () => {
                     <FaPlus /> Add New Category
                   </button>
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {categories.map((category) => (
                     <div
@@ -830,7 +883,6 @@ const AdminDashboard: React.FC = () => {
                     </div>
                   ))}
                 </div>
-
                 {categories.length === 0 && (
                   <div className="text-center py-16">
                     <FaList className="mx-auto text-6xl text-gray-300 mb-4" />
@@ -840,7 +892,113 @@ const AdminDashboard: React.FC = () => {
               </div>
             )}
 
-            {/* Dashboard Section (you can restore your original if you had one) */}
+            {/* ========== PROFILE SECTION ========== */}
+            {currentSection === "profile" && (
+              <div className="max-w-4xl mx-auto">
+                <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-200/50">
+                  <div className="flex items-center gap-6 mb-8">
+                    <div className="w-24 h-24 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-4xl font-bold">
+                      {currentUser[0]?.toUpperCase()}
+                    </div>
+                    <div>
+                      <h2 className="text-3xl font-bold text-gray-800">Admin Profile</h2>
+                      <p className="text-gray-600 mt-1">Manage your account settings</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+                    <div className="space-y-4  items-center justify-start gap-3.5">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Admin Name</label>
+                        <input type="text" name="name" defaultValue={currentUser} onChange={(e)=>setCurrentUser(e.target.value)} placeholder="e.g., admin@example.com" className="px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-gray-800 font-medium"/>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
+                        <input type="email" name="email" defaultValue={currentEmail} onChange={(e)=>setCurrentEmail(e.target.value)} placeholder="e.g., admin@example.com" className="px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-gray-800 font-medium"/>
+                      </div>
+                       <button
+                          type="submit"
+                          onClick={handleUserInfoChange}
+                          disabled={changeUserLoading}
+                          className="px-3 py-3 bg-gradient-to-r block from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 disabled:opacity-50"
+                        >
+                          {changeUserLoading ? (
+                            <>
+                              <FaSpinner className="inline-block animate-spin mr-2" />
+                              Updating...
+                            </>
+                          ) : (
+                            "Update Profile"
+                          )}
+                        </button>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-gray-200 pt-8">
+                    <h3 className="text-2xl font-bold text-gray-800 mb-6">Change Password</h3>
+                    <form onSubmit={handlePasswordChange} className="space-y-6 max-w-lg">
+                      <div className="space-y-2">
+                        <label className="block text-sm font-semibold text-gray-700">Current Password</label>
+                        <div className="relative">
+                          <FaLock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                          <input
+                            type="password"
+                            value={currentPassword}
+                            onChange={(e) => setCurrentPassword(e.target.value)}
+                            required
+                            className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-sm font-semibold text-gray-700">New Password</label>
+                        <div className="relative">
+                          <FaLock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                          <input
+                            type="password"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            required
+                            className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-sm font-semibold text-gray-700">Confirm New Password</label>
+                        <div className="relative">
+                          <FaLock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                          <input
+                            type="password"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            required
+                            className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={passwordChangeLoading}
+                          className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 disabled:opacity-50"
+                        >
+                          {passwordChangeLoading ? (
+                            <>
+                              <FaSpinner className="inline-block animate-spin mr-2" />
+                              Updating...
+                            </>
+                          ) : (
+                            "Update Password"
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Dashboard Section */}
             {currentSection === "dashboard" && (
               <div className="text-center py-20">
                 <FaRocket className="mx-auto text-8xl text-blue-500 mb-6 opacity-20" />
@@ -858,9 +1016,7 @@ const AdminDashboard: React.FC = () => {
       <AddressFormModalMultiple visible={showMultipleForm} onClose={() => setShowMultipleForm(false)} onSubmit={handleAddressByAddressArea} title="Add Multiple Addresses" />
       <CategoryFormModal visible={isAddCategoryModalVisible} onClose={() => setIsAddCategoryModalVisible(false)} onSubmit={handleAddCategory} title="Add New Category" />
       <CategoryFormModal visible={isEditCategoryModalVisible} onClose={() => { setIsEditCategoryModalVisible(false); setEditingCategory(null); }} onSubmit={handleUpdateCategory} title="Edit Category" category={editingCategory} />
-
       <NotificationComponent />
-
       <style>{`
         @keyframes slide-in-right { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
